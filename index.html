@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>⛽ مدیریت مصرف بنزین</title>
+
+<!-- PWA Meta -->
+<meta name="theme-color" content="#1976d2">
+<meta name="description" content="اپلیکیشن مدیریت و محاسبه مصرف بنزین خودرو">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="سوخت‌سنج">
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Tahoma, Arial, sans-serif;
+    background: #f5f5f5;
+    padding: 15px;
+    color: #333;
+    font-size: 17px;
+    padding-top: max(15px, env(safe-area-inset-top));
+    padding-bottom: max(15px, env(safe-area-inset-bottom));
+  }
+  h1 { text-align: center; font-size: 24px; margin: 10px 0 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  label { display: block; font-size: 16px; color: #555; margin-bottom: 6px; font-weight: bold; }
+  input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 20px; text-align: center; }
+  #consumption, #refuelAmount { font-size: 26px; font-weight: bold; }
+
+  button { width: 100%; padding: 15px; border: none; border-radius: 10px; color: #fff; font-size: 18px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+  button:active { opacity: 0.8; }
+  .btn-green { background: #16a34a; }
+  .btn-blue  { background: #2563eb; }
+  .btn-red   { background: #dc2626; }
+  .btn-gray  { background: #6b7280; }
+  .btn-teal  { background: #0d9488; }
+  .btn-amber { background: #f59e0b; }
+
+  .fuel-box { background: linear-gradient(135deg, #1e3a8a, #1e40af); border-radius: 16px; padding: 25px; text-align: center; color: #fff; margin: 15px 0; }
+  .fuel-box .label { color: #cbd5e1; font-size: 17px; font-weight: bold; }
+  .fuel-box .value { font-size: 64px; font-weight: bold; line-height: 1.1; margin: 5px 0; }
+  .fuel-box .unit { color: #cbd5e1; font-size: 19px; }
+  .fuel-box .range {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.25);
+    font-size: 34px;
+    font-weight: bold;
+    color: #fbbf24;
+    line-height: 1.3;
+  }
+
+  .stats { background: #fff; border-radius: 10px; padding: 14px; text-align: center; font-size: 17px; margin-bottom: 12px; }
+  .stats div { margin: 5px 0; }
+  .status { padding: 10px; border-radius: 6px; text-align: center; font-size: 15px; font-weight: bold; margin-bottom: 10px; }
+  .status.on  { background: #dcfce7; color: #166534; }
+  .status.off { background: #fee2e2; color: #991b1b; }
+
+  /* نصب PWA */
+  #installBtn {
+    display: none;
+    background: #0d9488;
+    margin-bottom: 12px;
+  }
+
+  /* بنر بروزرسانی */
+  #updateBanner {
+    display: none;
+    position: fixed;
+    bottom: 15px;
+    left: 15px;
+    right: 15px;
+    background: #16a34a;
+    color: white;
+    padding: 14px;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    z-index: 9999;
+  }
+  #updateBanner button {
+    background: white;
+    color: #16a34a;
+    margin-top: 10px;
+    padding: 10px;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+
+<h1>⛽ مدیریت مصرف بنزین</h1>
+
+<button id="installBtn" onclick="installApp()">📲 نصب اپلیکیشن</button>
+
+<div class="card">
+  <label>مصرف خودرو (لیتر در ۱۰۰ کیلومتر)</label>
+  <input type="number" id="consumption" value="8" step="0.1" inputmode="decimal">
+</div>
+
+<div class="card">
+  <label>بنزین زده‌شده در پمپ (لیتر)</label>
+  <input type="number" id="refuelAmount" placeholder="مثلاً 20" step="0.1" inputmode="decimal">
+  <button class="btn-green" onclick="handleRefuel()">➕ ثبت بنزین</button>
+  <button class="btn-amber" onclick="subtractFuel()">➖ کسر / تصحیح بنزین</button>
+</div>
+
+<div class="fuel-box">
+  <div class="label">بنزین باقی‌مانده در باک</div>
+  <div class="value" id="fuelDisplay">0.00</div>
+  <div class="unit">لیتر</div>
+  <div class="range" id="rangeDisplay">≈ 0 کیلومتر مانده</div>
+</div>
+
+<div class="stats">
+  <div>📍 مسافت این سفر: <b id="distanceDisplay">0.00</b> کیلومتر</div>
+  <div>🚗 سرعت فعلی: <b id="speedDisplay">0</b> km/h</div>
+</div>
+
+<div class="status off" id="status">GPS غیرفعال</div>
+
+<button class="btn-blue" id="trackBtn" onclick="toggleTracking()">▶ شروع ردیابی GPS</button>
+<button class="btn-gray" onclick="resetTrip()">🔄 ریست سفر</button>
+<button class="btn-teal" onclick="exportData()">📤 خروجی گرفتن (پشتیبان)</button>
+<button class="btn-gray" onclick="importData()">📥 بازیابی از فایل</button>
+<button class="btn-red" onclick="resetAll()">🗑 پاک کردن همه داده‌ها</button>
+<input type="file" id="importFile" accept=".json,application/json" style="display:none">
+
+<div id="updateBanner">
+  ✨ نسخه جدید آماده است
+  <button onclick="applyUpdate()">به‌روزرسانی</button>
+</div>
+
+<script>
+// ==================== منطق اصلی اپ ====================
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+const STORE_KEY = 'fuel_tracker_data';
+let state = { fuel: 0, consumption: 8, distance: 0, lastRefuel: 0 };
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) state = { ...state, ...JSON.parse(raw) };
+    const consumptionEl = document.getElementById('consumption');
+    if (consumptionEl) consumptionEl.value = state.consumption;
+    updateUI();
+    if (raw) setStatus('✅ داده‌های قبلی بازیابی شد', true);
+  } catch (e) {
+    console.error('خطا در بارگذاری:', e);
+    updateUI();
+  }
+}
+
+function updateUI() {
+  document.getElementById('fuelDisplay').textContent = state.fuel.toFixed(2);
+  document.getElementById('distanceDisplay').textContent = state.distance.toFixed(2);
+  const consumption = state.consumption > 0 ? state.consumption : 8;
+  const rangeKm = (state.fuel / consumption) * 100;
+  document.getElementById('rangeDisplay').textContent =
+    '≈ ' + Math.round(rangeKm) + ' کیلومتر مانده';
+}
+
+function handleRefuel() {
+  const el = document.getElementById('refuelAmount');
+  const amount = parseFloat(el.value);
+  if (isNaN(amount) || amount <= 0) { alert('مقدار بنزین معتبر وارد کن'); return; }
+  state.fuel += amount;
+  state.lastRefuel = amount;
+  state.distance = 0;
+  lastPos = null;
+  el.value = '';
+  save();
+  updateUI();
+  alert(`${amount} لیتر اضافه شد. موجودی: ${state.fuel.toFixed(2)} لیتر`);
+}
+
+function subtractFuel() {
+  const hint = state.lastRefuel > 0
+    ? `\n\n💡 آخرین ثبت تو: ${state.lastRefuel} لیتر`
+    : '';
+  const input = prompt('چند لیتر از باک کم شود؟' + hint);
+  if (input === null) return;
+
+  const amount = parseFloat(input);
+  if (isNaN(amount) || amount <= 0) {
+    alert('مقدار معتبر وارد کن ❌');
+    return;
+  }
+
+  if (amount > state.fuel) {
+    if (!confirm(`باک فقط ${state.fuel.toFixed(2)} لیتر داره.\nباک صفر بشه؟`)) return;
+  }
+
+  const before = state.fuel;
+  state.fuel = Math.max(0, state.fuel - amount);
+  if (state.lastRefuel > 0) state.lastRefuel = 0;
+  save();
+  updateUI();
+  setStatus(`✅ ${amount} لیتر کسر شد (قبلی: ${before.toFixed(2)})`, true);
+}
+
+function resetTrip() {
+  if (!confirm('مسافت سفر صفر بشه؟ (بنزین دست نمی‌خوره)')) return;
+  state.distance = 0;
+  lastPos = null;
+  save();
+  updateUI();
+}
+
+function resetAll() {
+  if (!confirm('همه داده‌ها پاک بشه؟')) return;
+  state = { fuel: 0, consumption: 8, distance: 0, lastRefuel: 0 };
+  localStorage.removeItem(STORE_KEY);
+  document.getElementById('consumption').value = 8;
+  lastPos = null;
+  updateUI();
+  setStatus('GPS غیرفعال', false);
+}
+
+function exportData() {
+  const now = new Date();
+  const stamp = now.getFullYear() + '-' +
+    String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0') + '_' +
+    String(now.getHours()).padStart(2,'0') + '-' +
+    String(now.getMinutes()).padStart(2,'0');
+
+  const backup = {
+    app: 'fuel-tracker',
+    version: 1,
+    exportedAt: now.toISOString(),
+    state: state
+  };
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backup-benzin-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus('✅ فایل پشتیبان ذخیره شد', true);
+}
+
+function importData() {
+  document.getElementById('importFile').click();
+}
+
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const incoming = data.state || data;
+
+      if (typeof incoming.fuel !== 'number') {
+        alert('فایل معتبر نیست ❌');
+        return;
+      }
+
+      if (!confirm('داده‌های فعلی با فایل پشتیبان جایگزین بشن؟')) return;
+
+      state = {
+        fuel: incoming.fuel || 0,
+        consumption: incoming.consumption || 8,
+        distance: incoming.distance || 0,
+        lastRefuel: incoming.lastRefuel || 0
+      };
+
+      document.getElementById('consumption').value = state.consumption;
+      lastPos = null;
+      save();
+      updateUI();
+      setStatus('✅ داده‌ها با موفقیت بازیابی شد', true);
+    } catch (err) {
+      alert('خطا در خواندن فایل ❌\n' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ==================== GPS ====================
+let watchId = null;
+let lastPos = null;
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch (e) { /* silent */ }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(()=>{}); wakeLock = null; }
+}
+
+function toggleTracking() {
+  if (watchId !== null) stopTracking();
+  else startTracking();
+}
+
+function startTracking() {
+  if (!navigator.geolocation) { alert('مرورگرت از GPS پشتیبانی نمی‌کنه'); return; }
+  lastPos = null;
+  watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+    enableHighAccuracy: true, maximumAge: 0, timeout: 15000
+  });
+  acquireWakeLock();
+  const btn = document.getElementById('trackBtn');
+  btn.textContent = '⏹ توقف ردیابی GPS';
+  btn.className = 'btn-red';
+  setStatus('در حال دریافت مختصات...', true);
+}
+
+function stopTracking() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  releaseWakeLock();
+  const btn = document.getElementById('trackBtn');
+  btn.textContent = '▶ شروع ردیابی GPS';
+  btn.className = 'btn-blue';
+  setStatus('GPS غیرفعال', false);
+}
+
+function setStatus(text, on) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = 'status ' + (on ? 'on' : 'off');
+}
+
+function onPosition(pos) {
+  const { latitude, longitude, speed, accuracy } = pos.coords;
+  setStatus(`✅ GPS فعال — دقت: ${accuracy.toFixed(0)} متر`, true);
+
+  if (speed !== null && speed !== undefined) {
+    document.getElementById('speedDisplay').textContent = (speed * 3.6).toFixed(0);
+  }
+
+  if (accuracy > 50) return;
+
+  if (lastPos) {
+    const d = haversine(lastPos.lat, lastPos.lon, latitude, longitude);
+    if (d < 0.5 && d > 0.005) {
+      const consumption = parseFloat(document.getElementById('consumption').value) || 8;
+      state.consumption = consumption;
+      const usedFuel = (d * consumption) / 100;
+      state.fuel = Math.max(0, state.fuel - usedFuel);
+      state.distance += d;
+      save();
+      updateUI();
+    }
+  }
+  lastPos = { lat: latitude, lon: longitude };
+}
+
+function onError(err) {
+  let msg = 'خطای GPS: ';
+  switch(err.code) {
+    case err.PERMISSION_DENIED: msg += 'دسترسی داده نشد.'; break;
+    case err.POSITION_UNAVAILABLE: msg += 'موقعیت در دسترس نیست.'; break;
+    case err.TIMEOUT: msg += 'زمان دریافت تمام شد.'; break;
+    default: msg += err.message;
+  }
+  setStatus(msg, false);
+}
+
+document.getElementById('consumption').addEventListener('input', (e) => {
+  state.consumption = parseFloat(e.target.value) || 8;
+  save();
+  updateUI();
+});
+
+window.addEventListener('pagehide', save);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') save();
+  else if (watchId !== null && !wakeLock) acquireWakeLock();
+});
+
+// ==================== PWA: نصب و بروزرسانی ====================
+let deferredPrompt = null;
+let swRegistration = null;
+let refreshing = false;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBtn').style.display = 'block';
+});
+
+async function installApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  console.log('Install outcome:', outcome);
+  deferredPrompt = null;
+  document.getElementById('installBtn').style.display = 'none';
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBtn').style.display = 'none';
+  deferredPrompt = null;
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      swRegistration = await navigator.serviceWorker.register('./service-worker.js');
+
+      swRegistration.addEventListener('updatefound', () => {
+        const newWorker = swRegistration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            document.getElementById('updateBanner').style.display = 'block';
+          }
+        });
+      });
+
+      // بررسی بروزرسانی هر ساعت
+      setInterval(() => swRegistration && swRegistration.update(), 60 * 60 * 1000);
+    } catch (err) {
+      console.error('SW registration failed:', err);
+    }
+  });
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+}
+
+function applyUpdate() {
+  if (swRegistration && swRegistration.waiting) {
+    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  } else {
+    window.location.reload();
+  }
+}
+
+// شروع
+load();
+</script>
+</body>
+</html>
